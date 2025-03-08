@@ -58,15 +58,16 @@ def get_attachments():
             
             for field_name in attachment_fields:
                 if field_name in fields and isinstance(fields[field_name], list):
-                    file_url = fields[field_name][0]['url']
-                    file_name = fields[field_name][0]['filename']  # Use actual filename from Airtable
-
-                    print(f"Fetching data from {file_name}...")
-                    csv_content = fetch_csv_data(file_url)
-
-                    if csv_content:
-                        file_data.append(csv_content)
-                        file_names.append(file_name)
+                    for attachment in fields[field_name]:  # Iterate through all uploaded files
+                        file_url = attachment['url']
+                        file_name = attachment['filename']
+            
+                        print(f"Fetching data from {file_name}...")
+                        csv_content = fetch_csv_data(file_url)
+            
+                        if csv_content:
+                            file_data.append(csv_content)
+                            file_names.append(file_name)
 
             if file_data:
                 submissions.append({'name': name, 'email': email, 'file_data': file_data, 'file_names': file_names})
