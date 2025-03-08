@@ -68,7 +68,14 @@ def main():
     email_address = os.getenv('EMAIL_ADDRESS')
     email_password = os.getenv('EMAIL_PASSWORD')
     admin_email = os.getenv('ADMIN_EMAIL')
-    recipient_email = os.getenv('RECIPIENT_EMAIL')
+    recipient_email = None
+    for record in records:
+        recipient_email = record.get("fields", {}).get("Email")
+        if recipient_email:
+            break  # Use the first valid email found
+    
+    if not recipient_email:
+        raise ValueError("Error: No recipient email found in Airtable records.")
 
     records = fetch_records(api_key, base_id, table_name)
     duplicates = find_duplicates(records)
