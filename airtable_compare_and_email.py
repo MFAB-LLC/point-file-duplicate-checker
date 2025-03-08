@@ -111,7 +111,7 @@ def send_email(subject, body, recipient, admin_email):
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = recipient
         msg['Bcc'] = admin_email
-    msg['Subject'] = subject
+        msg['Subject'] = subject
         
         msg.attach(MIMEText(body, 'plain'))
         
