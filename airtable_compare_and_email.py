@@ -34,7 +34,7 @@ def fetch_csv_data(file_url):
 # Function to get attachments and relevant data from Airtable
 def get_attachments():
     try:
-        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}"
+        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}?sort[0][field]=Created%20Time&sort[0][direction]=desc&maxRecords=1"
         headers = {"Authorization": f"Bearer {AIRTABLE_ACCESS_TOKEN}"}
         
         response = requests.get(url, headers=headers)
