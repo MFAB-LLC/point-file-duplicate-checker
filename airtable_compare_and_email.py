@@ -34,16 +34,20 @@ def fetch_csv_data(file_url):
 # Function to get attachments and relevant data from Airtable
 def get_attachments():
     try:
-        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}"
+        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}?sort[0][field]=createdTime&sort[0][direction]=desc&maxRecords=1"
         headers = {"Authorization": f"Bearer {AIRTABLE_ACCESS_TOKEN}"}
         
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         
         records = response.json().get('records', [])
+        if not records:
+            print("No new records found.")
+            return []
+        
         submissions = []
 
-        for record in records:
+        for record in records:  # This should now only loop through the **latest** record
             fields = record.get('fields', {})
             name = fields.get('Name', 'Unknown')
             email = fields.get('Email', '')
