@@ -34,20 +34,16 @@ def fetch_csv_data(file_url):
 # Function to get attachments and relevant data from Airtable
 def get_attachments():
     try:
-        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}?sort[0][field]=Created Time&sort[0][direction]=desc&maxRecords=1"
+        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}"
         headers = {"Authorization": f"Bearer {AIRTABLE_ACCESS_TOKEN}"}
         
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         
         records = response.json().get('records', [])
-        if not records:
-            print("No new records found.")
-            return []
-        
         submissions = []
 
-        for record in records:  # This should now only loop through the **latest** record
+        for record in records:
             fields = record.get('fields', {})
             name = fields.get('Name', 'Unknown')
             email = fields.get('Email', '')
@@ -57,8 +53,8 @@ def get_attachments():
 
             file_data, file_names = [], []
 
-            # Loop through attachment fields (File 1 to File 5)
-            attachment_fields = ['File 1', 'File 2', 'File 3', 'File 4', 'File 5']
+            # Loop through attachment fields
+            attachment_fields = ['Upload Files']
             
             for field_name in attachment_fields:
                 if field_name in fields and isinstance(fields[field_name], list):
@@ -80,7 +76,7 @@ def get_attachments():
     except Exception as e:
         error_msg = f"Error fetching data from Airtable: {str(e)}"
         print(error_msg)
-        send_email("Airtable Fetch Error", error_msg, ADMIN_EMAIL, ADMIN_EMAIL)
+        send_email("Airtable Fetch Error", error_msg, ADMIN_EMAIL)
         return []
 
 # Function to find duplicates in the first column across multiple CSV files
