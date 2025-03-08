@@ -41,18 +41,21 @@ def find_duplicates(records):
 def send_email(subject, body, smtp_server, smtp_port, email_address, email_password, recipient_email, admin_email):
     msg = MIMEMultipart()
     msg['From'] = email_address
-    msg['To'] = recipient_email
-    msg['Bcc'] = admin_email
+    msg['To'] = recipient_email  # Main recipient
+    msg['Bcc'] = admin_email  # Admin gets BCC'd
+
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
 
     server = smtplib.SMTP(smtp_server, smtp_port)
     server.starttls()
     server.login(email_address, email_password)
-    text = msg.as_string()
-    server.sendmail(email_address, [recipient_email, admin_email], text)
+    
+    all_recipients = [recipient_email] + ([admin_email] if admin_email else [])
+    print(f"Sending email to: {recipient_email}, BCC: {admin_email}")  # Debugging output
+    
+    server.sendmail(email_address, all_recipients, msg.as_string())
     server.quit()
-
 
 def main():
     import os
