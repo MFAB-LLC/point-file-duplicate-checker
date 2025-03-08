@@ -34,7 +34,7 @@ def fetch_csv_data(file_url):
 # Function to get attachments and relevant data from Airtable
 def get_attachments():
     try:
-        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}?sort[0][field]=createdTime&sort[0][direction]=desc&maxRecords=1"
+        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}?sort[0][field]=Created Time&sort[0][direction]=desc&maxRecords=1"
         headers = {"Authorization": f"Bearer {AIRTABLE_ACCESS_TOKEN}"}
         
         response = requests.get(url, headers=headers)
@@ -80,7 +80,7 @@ def get_attachments():
     except Exception as e:
         error_msg = f"Error fetching data from Airtable: {str(e)}"
         print(error_msg)
-        send_email("Airtable Fetch Error", error_msg, ADMIN_EMAIL)
+        send_email("Airtable Fetch Error", error_msg, ADMIN_EMAIL, ADMIN_EMAIL)
         return []
 
 # Function to find duplicates in the first column across multiple CSV files
