@@ -1,104 +1,159 @@
 import requests
+import csv
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from io import StringIO
+import traceback
 
+# Airtable and email configuration
+AIRTABLE_ACCESS_TOKEN = os.getenv('AIRTABLE_ACCESS_TOKEN')
+BASE_ID = os.getenv('BASE_ID')
+TABLE_NAME = os.getenv('TABLE_NAME')
+SMTP_SERVER = os.getenv('SMTP_SERVER')
+SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS')
+EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
 
-def fetch_records(api_key, base_id, table_name):
-    url = f"https://api.airtable.com/v0/{base_id}/{table_name}"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    response = requests.get(url, headers=headers)
-    return response.json().get("records", [])
-
-
-def extract_filenames(record):
-    filenames = []
-    for field, attachments in record.get("fields", {}).items():
-        if isinstance(attachments, list):
-            for attachment in attachments:
-                filename = attachment.get("filename")
-                if filename:
-                    filenames.append(filename)
-    return filenames
-
-
-def find_duplicates(records):
-    point_files = {}
-    
-    for record in records:
-        filenames = extract_filenames(record)
-        points = record.get("fields", {}).get("Points", [])
+# Function to fetch CSV content from a given Airtable file URL
+def fetch_csv_data(file_url):
+    try:
+        response = requests.get(file_url)
+        response.raise_for_status()
         
-        for point in points:
-            if point not in point_files:
-                point_files[point] = set()
-            point_files[point].update(filenames)
+        # Decode the content to text format
+        csv_data = response.content.decode('utf-8')
+        return csv_data
 
-    duplicates = {k: v for k, v in point_files.items() if len(v) > 1}
-    return duplicates
+    except Exception as e:
+        print(f"Error fetching CSV from {file_url}: {e}")
+        return None
 
+# Function to get attachments and relevant data from Airtable
+def get_attachments():
+    try:
+        url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}"
+        headers = {"Authorization": f"Bearer {AIRTABLE_ACCESS_TOKEN}"}
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        
+        records = response.json().get('records', [])
+        submissions = []
 
-def send_email(subject, body, smtp_server, smtp_port, email_address, email_password, recipient_email, admin_email):
-    msg = MIMEMultipart()
-    msg['From'] = email_address
-    msg['To'] = recipient_email  # Main recipient
-    msg['Bcc'] = admin_email  # Admin gets BCC'd
+        for record in records:
+            fields = record.get('fields', {})
+            name = fields.get('Name', 'Unknown')
+            email = fields.get('Email', '')
 
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
+            if not email:
+                continue
 
-    server = smtplib.SMTP(smtp_server, smtp_port)
-    server.starttls()
-    server.login(email_address, email_password)
+            file_data, file_names = [], []
+
+            # Loop through attachment fields (File 1 to File 5)
+            attachment_fields = ['File 1', 'File 2', 'File 3', 'File 4', 'File 5']
+            
+            for field_name in attachment_fields:
+                if field_name in fields and isinstance(fields[field_name], list):
+                    file_url = fields[field_name][0]['url']
+                    file_name = fields[field_name][0]['filename']  # Use actual filename from Airtable
+
+                    print(f"Fetching data from {file_name}...")
+                    csv_content = fetch_csv_data(file_url)
+
+                    if csv_content:
+                        file_data.append(csv_content)
+                        file_names.append(file_name)
+
+            if file_data:
+                submissions.append({'name': name, 'email': email, 'file_data': file_data, 'file_names': file_names})
+
+        return submissions
+
+    except Exception as e:
+        error_msg = f"Error fetching data from Airtable: {str(e)}"
+        print(error_msg)
+        send_email("Airtable Fetch Error", error_msg, ADMIN_EMAIL)
+        return []
+
+# Function to find duplicates in the first column across multiple CSV files
+def find_duplicates(file_data, file_names):
+    try:
+        data_map = {}
+
+        def load_first_column(csv_content, file_name):
+            csv_reader = csv.reader(StringIO(csv_content))
+            for row in csv_reader:
+                if row:
+                    key = row[0]
+                    data_map.setdefault(key, set()).add(file_name)
+
+        # Load data from each file
+        for content, name in zip(file_data, file_names):
+            load_first_column(content, name)
+
+        # Return only the entries with duplicates
+        return {k: v for k, v in data_map.items() if len(v) > 1}
+
+    except Exception as e:
+        error_msg = f"Error comparing files: {str(e)}"
+        print(error_msg)
+        send_email("File Comparison Error", error_msg, ADMIN_EMAIL)
+        return {}
+
+# Function to send the result email to the user
+def send_email(subject, body, recipient):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = recipient
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"Email sent to {recipient}")
     
-    all_recipients = [recipient_email] + ([admin_email] if admin_email else [])
-    print(f"Sending email to: {recipient_email}, BCC: {admin_email}")  # Debugging output
-    
-    server.sendmail(email_address, all_recipients, msg.as_string())
-    server.quit()
+    except Exception as e:
+        print(f"Error sending email to {recipient}: {e}")
+        traceback.print_exc()
 
+# Main script to fetch data, check for duplicates, and notify users
 def main():
-    import os
+    submissions = get_attachments()
 
-    api_key = os.getenv('AIRTABLE_API_KEY')
-    base_id = os.getenv('BASE_ID')
-    table_name = os.getenv('TABLE_NAME')
-    smtp_server = os.getenv('SMTP_SERVER')
-    smtp_port = os.getenv('SMTP_PORT')
-    email_address = os.getenv('EMAIL_ADDRESS')
-    email_password = os.getenv('EMAIL_PASSWORD')
-    admin_email = os.getenv('ADMIN_EMAIL')
-    recipient_email = None
-    for record in records:
-        recipient_email = record.get("fields", {}).get("Email")
-        if recipient_email:
-            break  # Use the first valid email found
-    
-    if not recipient_email:
-        raise ValueError("Error: No recipient email found in Airtable records.")
+    for submission in submissions:
+        name = submission['name']
+        email = submission['email']
+        file_data = submission['file_data']
+        file_names = submission['file_names']
 
-    records = fetch_records(api_key, base_id, table_name)
-    duplicates = find_duplicates(records)
-
-    name = table_name.replace("_", " ").title()
-    
-    if duplicates:
-        result_subject = f"{name}: Duplicates Found"
-        result_body = "Duplicate point numbers listed below were found in the following files: " 
+        duplicates = find_duplicates(file_data, file_names)
         
-        # Collect and join filenames
-        all_files = set(file for files in duplicates.values() for file in files)
-        result_body += f"{', '.join(all_files)}\n\n"
-    
-        for key, files in duplicates.items():
-            result_body += f"- {key}\n"
-    else:
-        result_subject = f"{name}: No Duplicates Found"
-        result_body = "No duplicates found in the submitted files."
-
-
-    send_email(result_subject, result_body, smtp_server, smtp_port, email_address, email_password, recipient_email, admin_email)
-
+        if duplicates:
+            result_subject = f"{name}: Duplicates Found"
+            result_body = "Duplicate point numbers listed below were found in the following files: " 
+            
+            # Collect and join filenames
+            all_files = set(file for files in duplicates.values() for file in files)
+            result_body += f"{', '.join(all_files)}\n\n"
+        
+            for key, files in duplicates.items():
+                result_body += f"- {key}\n"
+        else:
+            result_subject = f"{name}: No Duplicates Found"
+            result_body = "No duplicates found in the submitted files."
+        
+        # Send the results via email
+        send_email(result_subject, result_body, email)
 
 if __name__ == "__main__":
     main()
