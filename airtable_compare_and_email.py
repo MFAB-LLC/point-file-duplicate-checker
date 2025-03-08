@@ -105,12 +105,13 @@ def find_duplicates(file_data, file_names):
         return {}
 
 # Function to send the result email to the user
-def send_email(subject, body, recipient):
+def send_email(subject, body, recipient, admin_email):
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = recipient
-        msg['Subject'] = subject
+        msg['Bcc'] = admin_email
+    msg['Subject'] = subject
         
         msg.attach(MIMEText(body, 'plain'))
         
@@ -153,7 +154,7 @@ def main():
             result_body = "No duplicates found in the submitted files."
         
         # Send the results via email
-        send_email(result_subject, result_body, email)
+        send_email(result_subject, result_body, email, ADMIN_EMAIL)
 
 if __name__ == "__main__":
     main()
